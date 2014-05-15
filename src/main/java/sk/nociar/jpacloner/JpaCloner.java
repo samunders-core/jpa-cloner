@@ -17,6 +17,7 @@
  */
 package sk.nociar.jpacloner;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,6 +37,7 @@ import java.util.TreeSet;
 import javax.persistence.Embeddable;
 import javax.persistence.Entity;
 
+import sk.nociar.jpacloner.JpaIntrospector.JpaClassInfo;
 import sk.nociar.jpacloner.graphs.GraphExplorer;
 import sk.nociar.jpacloner.graphs.PropertyFilter;
 
@@ -101,18 +103,20 @@ public class JpaCloner extends AbstractJpaExplorer {
 	@Override
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	protected void explore(Object entity, String property, Collection<?> collection) {
-		Collection clonedCollection;
-		if (collection instanceof SortedSet) {
-			// create a tree set with the same comparator (may be null)
-			clonedCollection = new TreeSet(((SortedSet) collection).comparator());
-		} else if (collection instanceof Set) {
-			// create a hash set
-			clonedCollection = new LinkedHashSet();
-		} else if (collection instanceof List) {
-			// create an array list
-			clonedCollection = new ArrayList(collection.size());
-		} else {
-			throw new IllegalArgumentException("Unsupported collection class: " + collection.getClass());
+		Collection clonedCollection = newCloneableCollection(collection);
+		if (clonedCollection == null) {
+			if (collection instanceof SortedSet) {
+				// create a tree set with the same comparator (may be null)
+				clonedCollection = new TreeSet(((SortedSet) collection).comparator());
+			} else if (collection instanceof Set) {
+				// create a hash set
+				clonedCollection = new LinkedHashSet();
+			} else if (collection instanceof List) {
+				// create an array list
+				clonedCollection = new ArrayList(collection.size());
+			} else {
+				throw new IllegalArgumentException("Unsupported collection class: " + collection.getClass());
+			}
 		}
 		for (Object o : collection) {
 			clonedCollection.add(getClone(o));
@@ -130,11 +134,13 @@ public class JpaCloner extends AbstractJpaExplorer {
 	@Override
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	protected void explore(Object entity, String property, Map<?, ?> map) {
-		Map clonedMap;
-		if (map instanceof SortedMap) {
-			clonedMap = new TreeMap(((SortedMap) map).comparator());
-		} else {
-			clonedMap = new LinkedHashMap();
+		Map clonedMap = newCloneableMap(map);
+		if (clonedMap == null) {
+			if (map instanceof SortedMap) {
+				clonedMap = new TreeMap(((SortedMap) map).comparator());
+			} else {
+				clonedMap = new LinkedHashMap();
+			}
 		}
 		for (Entry entry : map.entrySet()) {
 			clonedMap.put(getClone(entry.getKey()), getClone(entry.getValue()));
@@ -157,6 +163,40 @@ public class JpaCloner extends AbstractJpaExplorer {
 		if (mappedBy != null) {
 			handleMappedBy(value, mappedBy, 0);
 		}
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private Collection newCloneableCollection(Collection original) {
+		if (original instanceof Cloneable) {
+			JpaClassInfo info = getClassInfo(original);
+			if (info.getCloner() != null) {
+				try {
+					Collection clonedCollection = (Collection) info.getCloner().invoke(original);
+					clonedCollection.clear();
+					return clonedCollection;
+				} catch (UnsupportedOperationException fallbackToOriginalImplementationSinceImmutable) {
+				} catch (IllegalAccessException unreachable) {	// guaranteed by JpaClassInfo
+				} catch (InvocationTargetException fallbackToOriginalImplementation) {}
+			}
+		}
+		return null;
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private Map newCloneableMap(Map original) {
+		if (original instanceof Cloneable) {
+			JpaClassInfo info = getClassInfo(original);
+			if (info.getCloner() != null) {
+				try {
+					Map clonedMap = (Map) info.getCloner().invoke(original);
+					clonedMap.clear();
+					return clonedMap;
+				} catch (UnsupportedOperationException fallbackToOriginalImplementationSinceImmutable) {
+				} catch (IllegalAccessException unreachable) {	// guaranteed by JpaClassInfo
+				} catch (InvocationTargetException fallbackToOriginalImplementation) {}
+			}
+		}
+		return null;
 	}
 	
 	private void handleMappedBy(Object o, List<String> mappedBy, int idx) {
