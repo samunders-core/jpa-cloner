@@ -101,6 +101,7 @@ public class JpaCloner extends AbstractJpaExplorer {
 	
 	@Override
 	@SuppressWarnings({ "unchecked", "rawtypes" })
+<<<<<<< HEAD
 	protected void explore(Object entity, String property, Collection<?> collection) {
 		Collection clonedCollection = newCloneableCollection(collection);
 		if (clonedCollection == null) {
@@ -115,7 +116,85 @@ public class JpaCloner extends AbstractJpaExplorer {
 				clonedCollection = new ArrayList(collection.size());
 			} else {
 				throw new IllegalArgumentException("Unsupported collection class: " + collection.getClass());
+=======
+	private Collection<Object> exploreAndClone(Object original, String property) {
+		if (original instanceof Entry) {
+			Entry entry = (Entry) original;
+			// handle Map.Entry#getKey() and Map.Entry#getValue()
+			if ("key".equals(property)) {
+				return Collections.singleton(entry.getKey());
+			} else if ("value".equals(property)) {
+				return Collections.singleton(entry.getValue());
+			} else {
+				throw new IllegalArgumentException("Map.Entry does not have property: " + property);
 			}
+		}
+		
+		JpaClassInfo info = JpaIntrospector.getClassInfo(original);
+		if (info == null || !info.getRelations().contains(property)) {
+			return null;
+		}
+		
+		Object clone = getClone(original);
+		Object value = JpaIntrospector.getProperty(original, property);
+
+		if (value == null) {
+			return null;
+		}
+
+		Object clonedValue;
+		Collection explored;
+		
+		if (value instanceof Collection) {
+			// Collection property
+			explored = (Collection) value;
+			Collection clonedCollection = newCloneableCollection(explored, info);
+			if (clonedCollection == null) {
+				if (explored instanceof SortedSet) {
+					// create a tree set with the same comparator (may be null)
+					clonedCollection = new TreeSet(((SortedSet) explored).comparator());
+				} else if (explored instanceof Set) {
+					// create a hash set
+					clonedCollection = new HashSet();
+				} else if (explored instanceof List) {
+					// create an array list
+					clonedCollection = new ArrayList(explored.size());
+				} else {
+					throw new IllegalArgumentException("Unsupported collection class: " + explored.getClass());
+				}
+>>>>>>> branch 'master' of https://github.com/samunders-core/jpa-cloner.git
+			}
+<<<<<<< HEAD
+=======
+			for (Object o : explored) {
+				clonedCollection.add(getClone(o));
+			}
+			clonedValue = clonedCollection;
+			handleMappedBy(explored, info, property);
+		} else if (value instanceof Map) {
+			// Map property
+			Map map = (Map) value;
+			explored = map.entrySet();
+			Map clonedMap = newCloneableMap(map, info);
+			if (clonedMap == null) {
+				if (value instanceof SortedMap) {
+					clonedMap = new TreeMap(((SortedMap) value).comparator());
+				} else {
+					clonedMap = new HashMap();
+				}
+			}
+			for (Object e : explored) {
+				Entry entry = (Entry) e;
+				clonedMap.put(getClone(entry.getKey()), getClone(entry.getValue()));
+			}
+			clonedValue = clonedMap;
+			handleMappedBy(map.values(), info, property);
+		} else {
+			// singular property
+			explored = Collections.singleton(value);
+			clonedValue = getClone(value);
+			handleMappedBy(explored, info, property);
+>>>>>>> branch 'master' of https://github.com/samunders-core/jpa-cloner.git
 		}
 		for (Object o : collection) {
 			clonedCollection.add(getClone(o));
@@ -165,6 +244,7 @@ public class JpaCloner extends AbstractJpaExplorer {
 	}
 	
 	@SuppressWarnings("rawtypes")
+<<<<<<< HEAD
 	private Collection newCloneableCollection(Collection original) {
 		if (original instanceof Cloneable) {
 			JpaClassInfo info = getClassInfo(original);
@@ -176,6 +256,41 @@ public class JpaCloner extends AbstractJpaExplorer {
 				} catch (UnsupportedOperationException fallbackToOriginalImplementationSinceImmutable) {
 				} catch (IllegalAccessException unreachable) {	// guaranteed by JpaClassInfo
 				} catch (InvocationTargetException fallbackToOriginalImplementation) {}
+=======
+	private Collection newCloneableCollection(Collection original, JpaClassInfo info) {
+		if (original instanceof Cloneable && info.getCloner() != null) {
+			try {
+				Collection clonedCollection = (Collection) info.getCloner().invoke(original);
+				clonedCollection.clear();
+				return clonedCollection;
+			} catch (UnsupportedOperationException fallbackToOriginalImplementationSinceImmutable) {
+			} catch (IllegalAccessException unreachable) {	// guaranteed by JpaClassInfo
+			} catch (InvocationTargetException fallbackToOriginalImplementation) {}
+		}
+		return null;
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private Map newCloneableMap(Map original, JpaClassInfo info) {
+		if (original instanceof Cloneable && info.getCloner() != null) {
+			try {
+				Map clonedMap = (Map) info.getCloner().invoke(original);
+				clonedMap.clear();
+				return clonedMap;
+			} catch (UnsupportedOperationException fallbackToOriginalImplementationSinceImmutable) {
+			} catch (IllegalAccessException unreachable) {	// guaranteed by JpaClassInfo
+			} catch (InvocationTargetException fallbackToOriginalImplementation) {}
+		}
+		return null;
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private void handleMappedBy(Collection explored, JpaClassInfo info, String property) {
+		List<String> mappedBy = info.getMappedBy(property);
+		if (mappedBy != null) {
+			for (Object e : explored) {
+				handleMappedBy(e, mappedBy, 0);
+>>>>>>> branch 'master' of https://github.com/samunders-core/jpa-cloner.git
 			}
 		}
 		return null;
