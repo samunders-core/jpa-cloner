@@ -37,7 +37,6 @@ import java.util.TreeSet;
 import javax.persistence.Embeddable;
 import javax.persistence.Entity;
 
-import sk.nociar.jpacloner.JpaIntrospector.JpaClassInfo;
 import sk.nociar.jpacloner.graphs.GraphExplorer;
 import sk.nociar.jpacloner.graphs.PropertyFilter;
 
